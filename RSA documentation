@@ -1,0 +1,179 @@
+RSA_V1.py — Baseline RSA + CRT and Benchmarks
+Key generation: two random probable primes via trial division (6k±1 optimization), modulus n=pq, Euler’s φ, public exponent e chosen as the smallest odd co-prime ≥ 3.
+
+Keys: RSAKey object in both public/private forms; private key stores CRT parameters dp=d mod (p−1), dq=d mod (q−1), qinv=q⁻¹ mod p (precomputed).
+
+Encryption/Decryption: integer RSA c = m^e mod n, m = c^d mod n.
+
+CRT decryption: recombination using m1 = c^dp mod p, m2 = c^dq mod q, h = qinv·(m1−m2) mod p, result m = m2 + h·q.
+
+Benchmarking: compares standard vs CRT decryption time over several key sizes; prints speedup and space usage (via sys.getsizeof), and plots four subplots (times, speedup, storage, and storage overhead).
+
+RSA_V2.py — Analyzer Class with Miller–Rabin, Timing & Memory
+Class: RSAComplexityAnalyzer encapsulates algorithms and measurements.
+
+Primality: Miller–Rabin; random odd candidates; quick divisibility screen.
+
+Core math: gcd, extended_gcd, mod_inverse, binary modular exponentiation mod_pow.
+
+Keypair: dicts {{'n': n, 'e': e}}, {{'n': n, 'd': d}}; default e=65537, falls back to 17 or 3 if needed; ensures gcd(e, φ(n))=1.
+
+Encryption/Decryption: operates per byte of a bytes message, returning a List[int] ciphertext; decryption returns bytes.
+
+Measurement decorator: @measure_time_space wraps key functions to return (result, time_sec, mem_MB) using psutil (if available) or tracemalloc as fallback.
+
+Benchmarking: benchmark_key_sizes([...], iterations=k) collects timing/memory stats; optional Matplotlib/Numpy plots; prints an extended complexity summary (asymptotics & trade-offs).
+
+Demo: shows full encrypt/decrypt flow and timing.
+
+RSA_V3.py — Minimal Baseline + Simple Plots
+Key generation: trial division primality (like V1).
+
+Keys: tuples (n, e) and (n, d).
+
+Benchmarks: averages encryption/decryption time over many trials with small key sizes and plots time (log-scale) and space usage.
+
+3) API Reference (by file)
+3.1. RSA_V1.py
+Types
+
+class RSAKey(n, e, d, p=None, q=None) → exposes n, e, d, p, q, dp, dq, qinv
+
+Functions
+
+is_prime(n: int) -> bool — trial division (6k±1).
+
+generate_prime(bits: int) -> int — odd candidate + primality test.
+
+extended_gcd(a, b) -> (gcd, x, y); mod_inverse(a, m) -> int.
+
+find_d(e, phi) -> int — private exponent via EEA.
+
+generate_rsa_keys(bits: int) -> (RSAKey public, RSAKey private).
+
+encrypt(m: int, public_key: RSAKey) -> int.
+
+decrypt_standard(c: int, private_key: RSAKey) -> int.
+
+decrypt_crt(c: int, private_key: RSAKey) -> int.
+
+benchmark_rsa(bits: int, num_trials: int=1000) -> tuple (times + space).
+
+Script behavior
+
+Iterates key_sizes = [32, 64, 128, 265, 512, 1024], prints metrics, draws a 2×2 performance figure (time curves, CRT speedup, space, overhead).
+
+3.2. RSA_V2.py
+Class: RSAComplexityAnalyzer
+
+generate_prime(bits) -> (prime:int, time:float, mem_MB:float)
+
+generate_keypair(k) -> ((pub, priv), time, mem) with pub={{'n','e'}}, priv={{'n','d'}}
+
+encrypt(message: bytes, public_key: Dict) -> (List[int], time, mem)
+
+decrypt(ciphertext: List[int], private_key: Dict) -> (bytes, time, mem)
+
+benchmark_key_sizes(key_sizes: List[int], iterations:int=3) -> Dict
+
+plot_complexity_analysis(results: Dict) → Matplotlib 2×2 figure (if available)
+
+print_complexity_summary() → console summary of time/space growth
+
+Static utilities
+
+gcd, extended_gcd, mod_inverse, mod_pow
+
+miller_rabin_test(n, k=10) — probabilistic primality
+
+generate_random_odd(bits)
+
+Dependencies (optional)
+
+Matplotlib, NumPy for plots/statistics; psutil for RSS memory; tracemalloc fallback.
+
+3.3. RSA_V3.py
+Functions
+
+is_prime, generate_prime, extended_gcd, find_d
+
+generate_rsa_keys(bits) -> ((n,e),(n,d))
+
+encrypt(m, (n,e)) -> int, decrypt(c, (n,d)) -> int
+
+benchmark_rsa(bits, num_trials=10000) -> (keygen, enc_avg, dec_avg, space)
+
+Script behavior
+
+Uses key_sizes = [32, 64, 128], prints metrics, then produces two plots: time (log-scale) and space.
+
+4) Usage & Benchmarks
+4.1. Choosing key sizes
+These scripts use small key sizes for speed in demos/plots. Real systems should use RSA-2048 or larger. Expect timings to scale roughly super-linearly with key size (keygen/dec ≈ cubic trends).
+
+4.2. Measuring CRT speedup (V1)
+Run RSA_V1.py and inspect printed CRT Speedup for each key size. The code also estimates space overhead for storing CRT parameters (note: sys.getsizeof reflects Python object overhead, not raw key bit lengths).
+
+4.3. Full complexity study (V2)
+Run RSA_V2.py. It will:
+
+produce per-size statistics over several iterations,
+
+print a complexity summary, and
+
+plot timing/memory figures if Matplotlib/NumPy are available.
+
+5) Security Notes & Limitations
+No padding: All versions perform raw textbook RSA. For real use, apply OAEP (encryption) or PSS (signatures), or use a vetted library (e.g., PyCryptodome).
+
+Per-byte encryption (V2) is insecure and only for demonstration; messages should be encoded as big integers smaller than n with proper padding.
+
+Primality: V1 & V3 use trial division and small bit sizes (not cryptographically strong). V2 uses Miller–Rabin but still targets demo-scale keys by default.
+
+Side channels: No constant-time guarantees; Python big-int and branch patterns leak timing.
+
+Key leakage in logs (V2): p and q are printed during key generation—avoid in any real setting.
+
+6) Known Issues & Suggested Fixes
+RSA_V1.py
+Typo in key sizes: 265 should be 256 (plot x-axis/curves will look odd around 265).
+
+Space measurement: sys.getsizeof measures Python object size, not cryptographic key size. If you want bit-lengths, use n.bit_length() etc.
+
+Public exponent selection: using the smallest odd e≥3 is fine educationally; for practice, use e=65537.
+
+RSA_V2.py
+Fallback stats helpers overshadow built-ins (min, max) and are defined only if Matplotlib import fails. Rename to e.g. min_, max_, mean_, std_, and ensure they don’t recursively call themselves.
+
+Demo label mismatch: the banner prints “DEMONSTRATION WITH RSA-512” but the code calls generate_keypair(64). Make them consistent.
+
+Printing primes: remove the print("P =", p) / print("q =", q) lines to avoid leaking private material.
+
+Per-byte RSA: clearly mark as pedagogical; consider adding a block encoding helper for messages as integers < n.
+
+Seed: Unlike V1/V3, V2 doesn’t set random.seed(...), so runs are non-reproducible across invocations (which is fine; just note it).
+
+RSA_V3.py
+Very small key sizes only; clarify in output that plots are for toy sizes.
+
+Trial division is slow for large sizes; if you extend V3, switch to Miller–Rabin as in V2.
+
+7) Extending the Suite
+Add OAEP/PSS padding utilities and a simple block encoder for messages.
+
+Centralize math (EEA, modexp, Miller–Rabin) in a shared module to avoid duplication.
+
+Add unit tests using known RSA properties and randomized round-trips.
+
+Record true key bit lengths alongside timings to relate size ↔ performance accurately.
+
+Add CRT to V3 and a crt=True/False switch for fair comparisons.
+
+Parameterize e and include a check for the common choice 65537.
+
+8) Appendix — Quick Reference
+Keygen: choose primes p,q → n=pq, φ=(p−1)(q−1), choose e with gcd(e,φ)=1, compute d ≡ e⁻¹ mod φ.
+
+Encrypt: c ≡ m^e mod n (with padded/encoded m<n).
+
+Decrypt: m ≡ c^d mod n; CRT speedup uses dp=d mod (p−1), dq=d mod (q−1), qinv=q⁻¹ mod p.
